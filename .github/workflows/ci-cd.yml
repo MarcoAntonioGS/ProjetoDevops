@@ -2,13 +2,28 @@ name: CI/CD Pipeline for School Scheduler
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master]  
   pull_request:
     branches: [main, master]
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+
+    # Serviço MySQL (novo!)
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          MYSQL_DATABASE: sistema_escolar
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
 
     steps:
       # Checkout do código
@@ -19,7 +34,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.13' # Use a versão compatível com seu ambiente
+          python-version: '3.13'
 
       # Instalar dependências
       - name: Install dependencies
@@ -28,12 +43,16 @@ jobs:
           pip install -r requirements.txt
           pip install mysql-connector-python pulp
 
+      # Aguardar MySQL inicializar (novo!)
+      - name: Wait for MySQL
+        run: sleep 30
+
       # Executar testes
       - name: Run tests
         run: |
-          python -m unittest tests/test_schedule.py
+          python -m unittest tests/test_schedule.py -v  # Adicionei -v para logs verbose
         env:
-          DB_HOST: localhost
+          DB_HOST: 127.0.0.1  # Use IP do serviço MySQL
           DB_USER: root
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_NAME: sistema_escolar
@@ -42,10 +61,8 @@ jobs:
       - name: Build package
         run: |
           echo "Building application..."
-          # Adicione comandos para empacotar (ex.: pyinstaller, se desejar um executável)
 
-      # Implantação (simulada, ajuste conforme necessário)
+      # Implantação (simulada)
       - name: Deploy
         run: |
           echo "Deploying to production..."
-          # Adicione comandos para copiar o código para um servidor ou ambiente local
