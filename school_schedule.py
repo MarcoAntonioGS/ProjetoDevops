@@ -5,6 +5,7 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 import random
 from datetime import datetime, timedelta
+import _tkinter  # Para capturar TclError no try-except
 
 # Configurações de conexão com o banco de dados MySQL
 DB_HOST = 'localhost'
@@ -74,6 +75,17 @@ def create_tables(connection):
     connection.commit()
     print("Tabelas criadas com sucesso")
 
+# Função para mostrar mensagem (compatível com CI/headless)
+def show_message(title, message, type="info"):
+    try:
+        import tkinter.messagebox as mb
+        if type == "info":
+            mb.showinfo(title, message)
+        elif type == "error":
+            mb.showerror(title, message)
+    except (ImportError, _tkinter.TclError):
+        print(f"{title}: {message} (Modo headless)")
+
 # Função para otimizar o cronograma usando PuLP
 def optimize_schedule(connection):
     cursor = connection.cursor()
@@ -81,15 +93,15 @@ def optimize_schedule(connection):
     # Verificar se há dados suficientes
     cursor.execute("SELECT COUNT(*) FROM professores")
     if cursor.fetchone()[0] == 0:
-        messagebox.showerror("Erro", "Nenhum professor cadastrado!")
+        show_message("Erro", "Nenhum professor cadastrado!", "error")
         return
     cursor.execute("SELECT COUNT(*) FROM materias")
     if cursor.fetchone()[0] == 0:
-        messagebox.showerror("Erro", "Nenhuma matéria cadastrada!")
+        show_message("Erro", "Nenhuma matéria cadastrada!", "error")
         return
     cursor.execute("SELECT COUNT(*) FROM turmas")
     if cursor.fetchone()[0] == 0:
-        messagebox.showerror("Erro", "Nenhuma turma cadastrada!")
+        show_message("Erro", "Nenhuma turma cadastrada!", "error")
         return
     
     cursor.execute("SELECT id, nome, disponibilidade, preferencias FROM professores")
@@ -151,7 +163,7 @@ def optimize_schedule(connection):
     prob.solve(pulp.PULP_CBC_CMD(msg=0))
     
     if pulp.LpStatus[prob.status] != 'Optimal':
-        messagebox.showerror("Erro", "Não foi possível gerar um cronograma. Verifique os dados inseridos!")
+        show_message("Erro", "Não foi possível gerar um cronograma. Verifique os dados inseridos!", "error")
         return
     
     cursor.execute("DELETE FROM cronogramas")
@@ -165,7 +177,7 @@ def optimize_schedule(connection):
             """, (p_id, m_id, t_id, d, inicio, fim))
     
     connection.commit()
-    messagebox.showinfo("Sucesso", "Cronograma gerado com sucesso!")
+    show_message("Sucesso", "Cronograma gerado com sucesso!", "info")
 
 # GUI para o diretor inserir dados
 class SchoolApp:
@@ -268,60 +280,60 @@ class SchoolApp:
         disp = self.prof_disp.get().strip()
         pref = self.prof_pref.get().strip()
         if not nome:
-            messagebox.showerror("Erro", "O nome do professor é obrigatório!")
+            show_message("Erro", "O nome do professor é obrigatório!", "error")
             return
         try:
             cursor = self.conn.cursor()
             cursor.execute("INSERT INTO professores (nome, disponibilidade, preferencias) VALUES (%s, %s, %s)", (nome, disp, pref))
             self.conn.commit()
-            messagebox.showinfo("Sucesso", f"Professor '{nome}' adicionado!")
+            show_message("Sucesso", f"Professor '{nome}' adicionado!", "info")
             self.clear_prof()
         except Error as e:
-            messagebox.showerror("Erro", f"Falha ao adicionar professor: {e}")
+            show_message("Erro", f"Falha ao adicionar professor: {e}", "error")
 
     def add_mat(self):
         nome = self.mat_nome.get().strip()
         carga = self.mat_carga.get().strip()
         if not nome:
-            messagebox.showerror("Erro", "O nome da matéria é obrigatório!")
+            show_message("Erro", "O nome da matéria é obrigatório!", "error")
             return
         try:
             carga = int(carga)
             if carga <= 0:
                 raise ValueError("Carga horária deve ser um número positivo!")
         except ValueError:
-            messagebox.showerror("Erro", "Carga horária deve ser um número inteiro positivo!")
+            show_message("Erro", "Carga horária deve ser um número inteiro positivo!", "error")
             return
         try:
             cursor = self.conn.cursor()
             cursor.execute("INSERT INTO materias (nome, carga_horaria) VALUES (%s, %s)", (nome, carga))
             self.conn.commit()
-            messagebox.showinfo("Sucesso", f"Matéria '{nome}' adicionada!")
+            show_message("Sucesso", f"Matéria '{nome}' adicionada!", "info")
             self.clear_mat()
         except Error as e:
-            messagebox.showerror("Erro", f"Falha ao adicionar matéria: {e}")
+            show_message("Erro", f"Falha ao adicionar matéria: {e}", "error")
 
     def add_tur(self):
         nome = self.tur_nome.get().strip()
         ano = self.tur_ano.get().strip()
         if not nome:
-            messagebox.showerror("Erro", "O nome da turma é obrigatório!")
+            show_message("Erro", "O nome da turma é obrigatório!", "error")
             return
         try:
             ano = int(ano)
             if ano <= 0:
                 raise ValueError("Ano deve ser um número positivo!")
         except ValueError:
-            messagebox.showerror("Erro", "Ano deve ser um número inteiro positivo!")
+            show_message("Erro", "Ano deve ser um número inteiro positivo!", "error")
             return
         try:
             cursor = self.conn.cursor()
             cursor.execute("INSERT INTO turmas (nome, ano) VALUES (%s, %s)", (nome, ano))
             self.conn.commit()
-            messagebox.showinfo("Sucesso", f"Turma '{nome}' adicionada!")
+            show_message("Sucesso", f"Turma '{nome}' adicionada!", "info")
             self.clear_tur()
         except Error as e:
-            messagebox.showerror("Erro", f"Falha ao adicionar turma: {e}")
+            show_message("Erro", f"Falha ao adicionar turma: {e}", "error")
 
     def list_data(self):
         self.data_text.delete(1.0, tk.END)

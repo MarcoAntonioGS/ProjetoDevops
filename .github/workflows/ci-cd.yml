@@ -2,7 +2,7 @@ name: CI/CD Pipeline for School Scheduler
 
 on:
   push:
-    branches: [main, master]  
+    branches: [main, master]
   pull_request:
     branches: [main, master]
 
@@ -10,7 +10,7 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
 
-    # Serviço MySQL (novo!)
+    # Serviço MySQL
     services:
       mysql:
         image: mysql:8.0
@@ -36,23 +36,25 @@ jobs:
         with:
           python-version: '3.13'
 
-      # Instalar dependências
+      # Instalar dependências (com build tools para PuLP)
       - name: Install dependencies
         run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install mysql-connector-python pulp
 
-      # Aguardar MySQL inicializar (novo!)
+      # Aguardar MySQL inicializar
       - name: Wait for MySQL
         run: sleep 30
 
       # Executar testes
       - name: Run tests
         run: |
-          python -m unittest tests/test_schedule.py -v  # Adicionei -v para logs verbose
+          python -m unittest tests/test_schedule.py -v
         env:
-          DB_HOST: 127.0.0.1  # Use IP do serviço MySQL
+          DB_HOST: 127.0.0.1
           DB_USER: root
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
           DB_NAME: sistema_escolar
