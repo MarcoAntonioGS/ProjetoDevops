@@ -10,7 +10,7 @@ import _tkinter  # Para capturar TclError no try-except
 # Configurações de conexão com o banco de dados MySQL
 DB_HOST = 'localhost'
 DB_USER = 'root'  # Substitua pelo seu usuário
-DB_PASSWORD = '221203Ma'  # Substitua pela sua senha
+DB_PASSWORD = ''  # Substitua pela sua senha
 DB_NAME = 'sistema_escolar'
 
 # Função para criar a conexão com o banco de dados
