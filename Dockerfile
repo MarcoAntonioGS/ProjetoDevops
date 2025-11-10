@@ -1,5 +1,8 @@
 ﻿FROM python:3.13-slim
 
+# Instalar dependências do Tkinter (necessário para GUI no container)
+RUN apt-get update && apt-get install -y python3-tk && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Copiar requirements e instalar dependências
