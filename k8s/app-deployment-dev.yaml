@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: school-scheduler
+  namespace: school-scheduler-dev
+  labels:
+    app: school-scheduler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: school-scheduler
+  template:
+    metadata:
+      labels:
+        app: school-scheduler
+    spec:
+      containers:
+        - name: school-scheduler
+          # For local dev you can build the image locally and use this tag.
+          # If you use Docker Desktop Kubernetes the cluster can access local images.
+          # For CI/CD change this to your registry (ghcr.io/..., docker.io/...) and push the image.
+          image: school_scheduler-app:latest
+          imagePullPolicy: IfNotPresent
+          # Run headless in Kubernetes (avoid GUI/X startup which will fail in cluster)
+          command: ["python", "school_schedule.py", "--headless", "--seed-sample"]
+          env:
+            - name: DB_HOST
+              value: mysql
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: user
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: password
+            - name: DB_NAME
+              value: sistema_escolar
+          # The app in this repo is a CLI/GUI python app. If you expose an HTTP
+          # endpoint later, add readiness/liveness probes. For now keep probes
+          # minimal or omitted so dev pods don't restart due to missing HTTP.
+          ports:
+            - containerPort: 8080
+              name: http
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"

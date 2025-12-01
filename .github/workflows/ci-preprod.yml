@@ -1,0 +1,37 @@
+name: CI - Preprodução
+on:
+  push:
+    branches: [ 'preprod' ]
+
+jobs:
+  build-test-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.13'
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run tests
+        run: python -m unittest discover -v
+      - name: Build and push image
+        env:
+          REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
+          USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          echo $PASSWORD | docker login $REGISTRY -u $USERNAME --password-stdin
+          IMAGE_TAG=preprod-${GITHUB_SHA::8}
+          docker build -t $REGISTRY/projetodevops:$IMAGE_TAG .
+          docker push $REGISTRY/projetodevops:$IMAGE_TAG
+      - name: Deploy to k8s (preprod)
+        env:
+          KUBECONFIG_DATA: ${{ secrets.KUBE_CONFIG_PREPROD }}
+        run: |
+          echo "$KUBECONFIG_DATA" | base64 --decode > kubeconfig
+          export KUBECONFIG=$(pwd)/kubeconfig
+          kubectl set image deployment/school-scheduler school-scheduler=$REGISTRY/projetodevops:$IMAGE_TAG -n preprod || kubectl apply -f k8s/

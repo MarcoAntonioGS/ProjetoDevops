@@ -1,0 +1,28 @@
+services:
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_DATABASE: sistema_escolar
+      MYSQL_ROOT_PASSWORD: rootpassword
+    ports:
+      - '3307:3306'
+    volumes:
+      - db_data_dev:/var/lib/mysql
+
+  app:
+    build: .
+    command: python school_schedule.py --seed-sample
+    environment:
+      DB_HOST: db
+      DB_USER: root
+      DB_PASSWORD: rootpassword
+      DB_NAME: sistema_escolar
+    volumes:
+      - ./:/app
+    ports:
+      - '8080:8080'
+    depends_on:
+      - db
+
+volumes:
+  db_data_dev:

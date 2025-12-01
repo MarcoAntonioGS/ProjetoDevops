@@ -1,0 +1,30 @@
+name: CI - Development
+on:
+  push:
+    branches: [ 'dev' ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.13'
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run tests
+        run: python -m unittest discover -v
+      - name: Build and push Docker image (dev tag)
+        env:
+          REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
+          USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+        run: |
+          echo $PASSWORD | docker login $REGISTRY -u $USERNAME --password-stdin
+          IMAGE_TAG=dev-${{ github.sha::8 }}
+          docker build -t $REGISTRY/projetodevops:$IMAGE_TAG .
+          docker push $REGISTRY/projetodevops:$IMAGE_TAG

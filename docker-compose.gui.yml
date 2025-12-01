@@ -1,0 +1,14 @@
+services:
+  app:
+    environment:
+      # Enviar saída X11 para o host (VcXsrv / XLaunch)
+      - DISPLAY=host.docker.internal:0.0
+      - LIBGL_ALWAYS_INDIRECT=1
+      - QT_X11_NO_MITSHM=1
+    command: python school_schedule.py
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./:/app
+    depends_on:
+      - db
