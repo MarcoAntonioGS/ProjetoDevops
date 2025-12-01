@@ -24,20 +24,7 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       KUBECONFIG: ${{ secrets.KUBECONFIG }}
 
-    # Serviço MySQL
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: ${{ env.DB_PASSWORD }}
-          MYSQL_DATABASE: sistema_escolar
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -p${{ env.DB_PASSWORD }}"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
+    # We'll start MySQL in a runner step (docker) so we can reference secrets safely
 
     steps:
       # Checkout do código
@@ -73,12 +60,17 @@ jobs:
           python -m pip install ruff
           ruff check .
 
+      - name: Start MySQL container
+        run: |
+          echo "Starting MySQL container"
+          docker run --detach --rm --name mysql -e MYSQL_ROOT_PASSWORD=${{ env.DB_PASSWORD }} -e MYSQL_DATABASE=sistema_escolar -p 3306:3306 mysql:8.0
+
       # Aguardar MySQL inicializar
       - name: Wait for MySQL
         run: |
-          # retry until mysql is up (30 attempts)
+          # retry until mysql is up (30 attempts) using mysqladmin inside the container
           for i in {1..30}; do
-            if mysqladmin ping -h 127.0.0.1 -uroot -p"${{ env.DB_PASSWORD }}" --silent; then
+            if docker exec mysql mysqladmin ping -uroot -p"${{ env.DB_PASSWORD }}" --silent; then
               echo "MySQL is up"
               break
             fi
@@ -135,4 +127,4 @@ jobs:
           echo "Waiting for deployment rollout"
           kubectl rollout status deployment/school-scheduler -n school-scheduler-dev --timeout=120s
         env:
-          KUBECONFIG: ${{ secrets.KUBECONFIG }}
+          KUBECONFIG: ${{ env.KUBECONFIG }}
