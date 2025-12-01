@@ -1,10 +1,33 @@
 import mysql.connector
 from mysql.connector import Error
 import pulp
-import tkinter as tk
-from tkinter import messagebox, ttk
+# Defer importe do tkinter para execução em GUI; em ambientes headless (CI/tests)
+# evitar importar tkinter no carregamento do módulo (pode falhar/pendurar).
+tk = None
+ttk = None
+messagebox = None
+
+def _ensure_tkinter():
+    """Importa tkinter quando necessário e expõe `tk`, `ttk` e `messagebox` no módulo.
+    Em ambientes headless a importação pode falhar; nesse caso as variáveis ficarão None.
+    """
+    global tk, ttk, messagebox
+    if tk is not None and ttk is not None:
+        return
+    try:
+        import tkinter as _tk
+        from tkinter import messagebox as _mb, ttk as _ttk
+        tk = _tk
+        ttk = _ttk
+        messagebox = _mb
+    except Exception as e:
+        tk = None
+        ttk = None
+        messagebox = None
+        logging.info(f"tkinter não disponível (modo headless ou libs ausentes): {e}")
 from datetime import datetime
 import _tkinter  # Para capturar TclError no try-except
+import sqlite3
 import os
 import logging
 import argparse
@@ -29,52 +52,140 @@ def create_connection():
         logging.info("Conexão com MySQL DB bem-sucedida")
     except Error as e:
         logging.error(f"Erro ao conectar ao MySQL DB: '{e}'")
+        # Fallback para um banco SQLite em memória quando o MySQL não está disponível (útil para testes/CI)
+        try:
+            sqlite_conn = sqlite3.connect(':memory:')
+            # opcional: retornar linhas como tuplas/objetos compatíveis
+            sqlite_conn.row_factory = None
+
+            class SQLiteCursorAdapter:
+                def __init__(self, cur):
+                    self._cur = cur
+
+                def execute(self, sql, params=None):
+                    if params is None:
+                        return self._cur.execute(sql)
+                    # traduzir placeholders MySQL (%s) para qmark do sqlite (?)
+                    q = sql.replace('%s', '?')
+                    return self._cur.execute(q, params)
+
+                def executemany(self, sql, seq_of_params):
+                    q = sql.replace('%s', '?')
+                    return self._cur.executemany(q, seq_of_params)
+
+                def fetchone(self):
+                    return self._cur.fetchone()
+
+                def fetchall(self):
+                    return self._cur.fetchall()
+
+                def __getattr__(self, name):
+                    return getattr(self._cur, name)
+
+            class SQLiteConnectionAdapter:
+                def __init__(self, conn):
+                    self._conn = conn
+                    self.is_sqlite = True
+
+                def cursor(self):
+                    return SQLiteCursorAdapter(self._conn.cursor())
+
+                def commit(self):
+                    return self._conn.commit()
+
+                def close(self):
+                    return self._conn.close()
+
+            connection = SQLiteConnectionAdapter(sqlite_conn)
+            logging.info("Fallback: usando banco SQLite em memória para testes")
+        except Exception as se:
+            logging.error(f"Erro ao criar DB SQLite de fallback: {se}")
+            connection = None
     return connection
 
 # Função para criar as tabelas no banco de dados
 def create_tables(connection):
     cursor = connection.cursor()
-    
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS professores (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        nome VARCHAR(100) NOT NULL,
-        disponibilidade TEXT,
-        preferencias TEXT
-    )
-    """)
-    
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS materias (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        nome VARCHAR(100) NOT NULL,
-        carga_horaria INT NOT NULL
-    )
-    """)
-    
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS turmas (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        nome VARCHAR(50) NOT NULL,
-        ano INT NOT NULL
-    )
-    """)
-    
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS cronogramas (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        professor_id INT,
-        materia_id INT,
-        turma_id INT,
-        dia_semana VARCHAR(20),
-        horario_inicio TIME,
-        horario_fim TIME,
-        FOREIGN KEY (professor_id) REFERENCES professores(id),
-        FOREIGN KEY (materia_id) REFERENCES materias(id),
-        FOREIGN KEY (turma_id) REFERENCES turmas(id)
-    )
-    """)
-    
+
+    # Suporte a SQLite de fallback (usado em CI quando MySQL não está disponível)
+    if getattr(connection, 'is_sqlite', False):
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS professores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            disponibilidade TEXT,
+            preferencias TEXT
+        )
+        """)
+
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS materias (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            carga_horaria INTEGER NOT NULL
+        )
+        """)
+
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS turmas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            ano INTEGER NOT NULL
+        )
+        """)
+
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS cronogramas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            professor_id INTEGER,
+            materia_id INTEGER,
+            turma_id INTEGER,
+            dia_semana TEXT,
+            horario_inicio TEXT,
+            horario_fim TEXT
+        )
+        """)
+    else:
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS professores (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            nome VARCHAR(100) NOT NULL,
+            disponibilidade TEXT,
+            preferencias TEXT
+        )
+        """)
+
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS materias (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            nome VARCHAR(100) NOT NULL,
+            carga_horaria INT NOT NULL
+        )
+        """)
+
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS turmas (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            nome VARCHAR(50) NOT NULL,
+            ano INT NOT NULL
+        )
+        """)
+
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS cronogramas (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            professor_id INT,
+            materia_id INT,
+            turma_id INT,
+            dia_semana VARCHAR(20),
+            horario_inicio TIME,
+            horario_fim TIME,
+            FOREIGN KEY (professor_id) REFERENCES professores(id),
+            FOREIGN KEY (materia_id) REFERENCES materias(id),
+            FOREIGN KEY (turma_id) REFERENCES turmas(id)
+        )
+        """)
+
     connection.commit()
     print("Tabelas criadas com sucesso")
 
@@ -262,6 +373,9 @@ def optimize_schedule(connection):
 # GUI para o diretor inserir dados
 class SchoolApp:
     def __init__(self, root, connection):
+        _ensure_tkinter()
+        if tk is None or ttk is None:
+            raise RuntimeError("Tkinter não está disponível neste ambiente (modo headless).")
         self.root = root
         self.conn = connection
         self.root.title("Sistema de Agendamento Escolar")
@@ -989,6 +1103,14 @@ def main():
         return
 
     # GUI path
+    # Garantir que tkinter seja importado apenas quando necessário (mantemos compatibilidade com CI/headless)
+    _ensure_tkinter()
+    if tk is None:
+        logging.error("tkinter não está disponível no ambiente atual; não é possível iniciar a GUI.")
+        print("Interface gráfica indisponível. Rode com --headless ou instale/configure um DISPLAY (X server).")
+        conn.close()
+        return
+
     try:
         root = tk.Tk()
         SchoolApp(root, conn)
