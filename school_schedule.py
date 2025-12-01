@@ -3,8 +3,7 @@ from mysql.connector import Error
 import pulp
 import tkinter as tk
 from tkinter import messagebox, ttk
-import random
-from datetime import datetime, timedelta
+from datetime import datetime
 import _tkinter  # Para capturar TclError no try-except
 import os
 import logging
