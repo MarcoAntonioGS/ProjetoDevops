@@ -1,6 +1,14 @@
 import mysql.connector
 from mysql.connector import Error
 import pulp
+from datetime import datetime
+import _tkinter  # Para capturar TclError no try-except
+import sqlite3
+import os
+import logging
+import argparse
+import sys
+
 # Defer importe do tkinter para execução em GUI; em ambientes headless (CI/tests)
 # evitar importar tkinter no carregamento do módulo (pode falhar/pendurar).
 tk = None
@@ -25,13 +33,6 @@ def _ensure_tkinter():
         ttk = None
         messagebox = None
         logging.info(f"tkinter não disponível (modo headless ou libs ausentes): {e}")
-from datetime import datetime
-import _tkinter  # Para capturar TclError no try-except
-import sqlite3
-import os
-import logging
-import argparse
-import sys
 
 # Configurações de conexão com o banco de dados MySQL
 DB_HOST = os.environ.get('DB_HOST', 'localhost')
