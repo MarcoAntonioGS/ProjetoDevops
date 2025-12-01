@@ -25,6 +25,7 @@ jobs:
           PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
         run: |
           echo $PASSWORD | docker login $REGISTRY -u $USERNAME --password-stdin
-          IMAGE_TAG=dev-${{ github.sha::8 }}
+          # use the GITHUB_SHA env var and bash substring to get the short sha
+          IMAGE_TAG=dev-${GITHUB_SHA::8}
           docker build -t $REGISTRY/projetodevops:$IMAGE_TAG .
           docker push $REGISTRY/projetodevops:$IMAGE_TAG
