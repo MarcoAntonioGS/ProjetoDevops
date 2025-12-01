@@ -991,8 +991,8 @@ def main():
 
     # GUI path
     try:
-    root = tk.Tk()
-    SchoolApp(root, conn)
+        root = tk.Tk()
+        SchoolApp(root, conn)
         root.mainloop()
     except _tkinter.TclError as e:
         logging.error(f"Erro ao iniciar GUI: {e}")
