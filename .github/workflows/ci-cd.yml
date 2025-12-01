@@ -17,18 +17,24 @@ jobs:
     strategy:
       matrix:
         python-version: [ '3.11', '3.13' ]
+    env:
+      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      KUBECONFIG: ${{ secrets.KUBECONFIG }}
 
     # Serviço MySQL
     services:
       mysql:
         image: mysql:8.0
         env:
-          MYSQL_ROOT_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          MYSQL_ROOT_PASSWORD: ${{ env.DB_PASSWORD }}
           MYSQL_DATABASE: sistema_escolar
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -p${{ secrets.DB_PASSWORD }}"
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -p${{ env.DB_PASSWORD }}"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
@@ -72,7 +78,7 @@ jobs:
         run: |
           # retry until mysql is up (30 attempts)
           for i in {1..30}; do
-            if mysqladmin ping -h 127.0.0.1 -uroot -p"${{ secrets.DB_PASSWORD }}" --silent; then
+            if mysqladmin ping -h 127.0.0.1 -uroot -p"${{ env.DB_PASSWORD }}" --silent; then
               echo "MySQL is up"
               break
             fi
@@ -87,7 +93,7 @@ jobs:
         env:
           DB_HOST: 127.0.0.1
           DB_USER: root
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_PASSWORD: ${{ env.DB_PASSWORD }}
           DB_NAME: sistema_escolar
 
       # Construir e empacotar (opcional)
@@ -96,25 +102,25 @@ jobs:
           echo "Building application..."
 
       - name: Build and optionally push Docker Hub image
-        if: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
+        if: ${{ env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != '' }}
         uses: docker/build-push-action@v4
         with:
           context: .
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/school_scheduler:latest
+          tags: ${{ env.DOCKERHUB_USERNAME }}/school_scheduler:latest
 
       - name: Build and optionally push GHCR image
-        if: ${{ secrets.GITHUB_TOKEN != '' }}
+        if: ${{ env.GITHUB_TOKEN != '' }}
         uses: docker/build-push-action@v4
         with:
           context: .
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/school_scheduler:latest
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
 
       - name: Kubernetes deploy (optional)
-        if: ${{ secrets.KUBECONFIG != '' }}
+        if: ${{ env.KUBECONFIG != '' }}
         run: |
           echo "Applying k8s manifests to cluster"
           echo "(This step expects a base64-encoded KUBECONFIG in the secret 'KUBECONFIG')"
