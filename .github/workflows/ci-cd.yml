@@ -109,14 +109,20 @@ jobs:
           push: true
           tags: ${{ env.DOCKERHUB_USERNAME }}/school_scheduler:latest
 
+      - name: Compute lowercase owner for GHCR tags
+        run: |
+          # GITHUB_REPOSITORY is 'owner/repo' -- extract owner and lowercase it
+          OWNER=$(echo "${GITHUB_REPOSITORY%%/*}" | tr '[:upper:]' '[:lower:]')
+          echo "OWNER_LOWER=$OWNER" >> $GITHUB_ENV
+
       - name: Build and optionally push GHCR image
         if: ${{ env.GITHUB_TOKEN != '' }}
         uses: docker/build-push-action@v4
         with:
           context: .
           push: true
-          # GitHub Container Registry requires lowercase repository names
-          tags: ghcr.io/${{ toLower(github.repository_owner) }}/school_scheduler:latest
+          # Use computed lowercase owner to ensure a valid GHCR repo name
+          tags: ghcr.io/${{ env.OWNER_LOWER }}/school_scheduler:latest
         env:
           GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
 
