@@ -19,6 +19,9 @@ jobs:
         python-version: [ '3.11', '3.13' ]
     env:
       DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      DB_HOST: 127.0.0.1
+      DB_USER: root
+      DB_NAME: sistema_escolar
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -59,18 +62,23 @@ jobs:
         run: |
           python -m pip install ruff
           ruff check .
-
-      - name: Start MySQL container
+      - name: Start MySQL container for tests
         run: |
           echo "Starting MySQL container"
-          docker run --detach --rm --name mysql -e MYSQL_ROOT_PASSWORD=${{ env.DB_PASSWORD }} -e MYSQL_DATABASE=sistema_escolar -p 3306:3306 mysql:8.0
+          # Allow root connections from any host (useful in CI) and create DB
+          docker run --detach --rm --name mysql \
+            -e MYSQL_ROOT_PASSWORD=${{ env.DB_PASSWORD }} \
+            -e MYSQL_DATABASE=${{ env.DB_NAME }} \
+            -e MYSQL_ROOT_HOST=% \
+            -p 3306:3306 \
+            mysql:8.0 --default-authentication-plugin=mysql_native_password
 
-      # Aguardar MySQL inicializar
+      # Aguardar MySQL inicializar (até ~60s)
       - name: Wait for MySQL
         run: |
-          # retry until mysql is up (30 attempts) using mysqladmin inside the container
-          for i in {1..30}; do
-            if docker exec mysql mysqladmin ping -uroot -p"${{ env.DB_PASSWORD }}" --silent; then
+          echo "Waiting for MySQL to become ready"
+          for i in $(seq 1 30); do
+            if docker exec mysql mysqladmin ping -h127.0.0.1 -uroot -p"${{ env.DB_PASSWORD }}" --silent; then
               echo "MySQL is up"
               break
             fi
