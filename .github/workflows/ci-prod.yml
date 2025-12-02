@@ -1,7 +1,7 @@
 name: CI - Production
 on:
   push:
-    branches: [ 'master' ]
+    branches: [ 'prod' ]
 
 jobs:
   build-and-test:
