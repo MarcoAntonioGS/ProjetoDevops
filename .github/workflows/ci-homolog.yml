@@ -44,14 +44,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run tests
+      - name: Debug repo & Run tests
         env:
           DB_HOST: 127.0.0.1
           DB_PORT: 3306
           DB_NAME: ${{ env.MYSQL_DATABASE }}
           DB_USER: ${{ env.MYSQL_USER }}
           DB_PASSWORD: ${{ env.MYSQL_PASSWORD }}
-        run: python -m unittest discover -v
+        run: |
+          echo "Listing repository root for debug"
+          ls -la
+          echo "Listing tests directory"
+          ls -la tests || true
+          python -m unittest discover -s tests -p 'test_*.py' -v
 
       - name: Login to container registry
         if: ${{ env.DOCKER_REGISTRY != '' && env.DOCKER_USERNAME != '' && env.DOCKER_PASSWORD != '' }}
