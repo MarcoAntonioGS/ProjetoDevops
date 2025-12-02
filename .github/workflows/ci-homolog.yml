@@ -3,35 +3,53 @@ on:
   push:
     branches: [ 'homolog' ]
 
+permissions:
+  contents: read
+
 jobs:
   build-test-deploy:
     runs-on: ubuntu-latest
+    env:
+      DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
+      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+      DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+      KUBECONFIG_DATA: ${{ secrets.KUBE_CONFIG_HOM }}
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.13'
+
       - name: Install deps
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
       - name: Run tests
         run: python -m unittest discover -v
-      - name: Build and push image
-        env:
-          REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
-          USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Login to registry (if configured)
+        if: ${{ env.DOCKER_REGISTRY != '' && env.DOCKER_USERNAME != '' && env.DOCKER_PASSWORD != '' }}
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ env.DOCKER_USERNAME }}
+          password: ${{ env.DOCKER_PASSWORD }}
+
+      - name: Build and push image (homolog)
+        if: ${{ env.DOCKER_REGISTRY != '' && env.DOCKER_USERNAME != '' && env.DOCKER_PASSWORD != '' }}
         run: |
-          echo $PASSWORD | docker login $REGISTRY -u $USERNAME --password-stdin
           IMAGE_TAG=homolog-${GITHUB_SHA::8}
-          docker build -t $REGISTRY/projetodevops:$IMAGE_TAG .
-          docker push $REGISTRY/projetodevops:$IMAGE_TAG
+          docker build -t ${{ env.DOCKER_REGISTRY }}/projetodevops:$IMAGE_TAG .
+          docker push ${{ env.DOCKER_REGISTRY }}/projetodevops:$IMAGE_TAG
+
       - name: Deploy to k8s (homolog)
-        env:
-          KUBECONFIG_DATA: ${{ secrets.KUBE_CONFIG_HOM }}
+        if: ${{ env.KUBECONFIG_DATA != '' }}
         run: |
           echo "$KUBECONFIG_DATA" | base64 --decode > kubeconfig
           export KUBECONFIG=$(pwd)/kubeconfig
-          kubectl set image deployment/school-scheduler school-scheduler=$REGISTRY/projetodevops:$IMAGE_TAG -n homolog || kubectl apply -f k8s/
+          kubectl set image deployment/school-scheduler school-scheduler=${{ env.DOCKER_REGISTRY }}/projetodevops:$IMAGE_TAG -n homolog || kubectl apply -f k8s/

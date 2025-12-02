@@ -3,10 +3,14 @@ on:
   push:
     branches: [ 'dev' ]
 
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
     env:
+      # map secrets to env so we don't reference secrets.* directly in step conditionals
       MYSQL_ROOT_PASSWORD: ${{ secrets.MYSQL_ROOT_PASSWORD }}
       MYSQL_DATABASE: ${{ secrets.MYSQL_DATABASE }}
       MYSQL_USER: ${{ secrets.MYSQL_USER }}
@@ -14,26 +18,35 @@ jobs:
       DOCKER_REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
       DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
       DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.13'
-      - name: Install deps
+
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
       - name: Run tests
         run: python -m unittest discover -v
-      - name: Build and push Docker image (dev tag)
-        env:
-          REGISTRY: ${{ secrets.DOCKER_REGISTRY }}
-          USERNAME: ${{ secrets.DOCKER_USERNAME }}
-          PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Login to registry (if configured)
+        if: ${{ env.DOCKER_REGISTRY != '' && env.DOCKER_USERNAME != '' && env.DOCKER_PASSWORD != '' }}
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ env.DOCKER_USERNAME }}
+          password: ${{ env.DOCKER_PASSWORD }}
+
+      - name: Build and push image (dev)
+        if: ${{ env.DOCKER_REGISTRY != '' && env.DOCKER_USERNAME != '' && env.DOCKER_PASSWORD != '' }}
         run: |
-          echo $PASSWORD | docker login $REGISTRY -u $USERNAME --password-stdin
-          # use the GITHUB_SHA env var and bash substring to get the short sha
           IMAGE_TAG=dev-${GITHUB_SHA::8}
-          docker build -t $REGISTRY/projetodevops:$IMAGE_TAG .
-          docker push $REGISTRY/projetodevops:$IMAGE_TAG
+          docker build -t ${{ env.DOCKER_REGISTRY }}/projetodevops:$IMAGE_TAG .
+          docker push ${{ env.DOCKER_REGISTRY }}/projetodevops:$IMAGE_TAG
