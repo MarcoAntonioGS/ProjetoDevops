@@ -1,0 +1,14 @@
+name: CI - Sanity check
+
+on:
+  push:
+    branches: [ master, main ]
+
+jobs:
+  sanity:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Echo
+        run: echo "GitHub Actions workflows are present and this runner executed the sanity workflow."
