@@ -57,13 +57,57 @@ docker compose -f docker-compose.dev.yml up --build
 
 # Subir GUI local (execute o X Server antes — VcXsrv / XLaunch)
 docker compose -f docker-compose.gui.yml up --build
-
-# Limpar containers que contenham 'school_scheduler' no nome
-docker ps -a --filter "name=school_scheduler" --format "{{.ID}} {{.Names}}" | ForEach-Object { docker rm -f ($_.Split()[0]) }
-
-# (Opcional) Remover volumes relacionados (apaga dados)
-docker volume ls --filter name=school_scheduler -q | ForEach-Object { docker volume rm $_ }
 ```
+
+Detalhes dos workflows de CI (por ambiente)
+
+A seguir descrevo, no meu próprio formato de trabalho académico, o que cada workflow faz e por que o configurei assim.
+
+- `ci-dev.yml` — objetivo: validação rápida em ambiente de desenvolvimento.
+	- Quando é executado: push em branches de desenvolvimento e `workflow_dispatch` para execuções manuais.
+	- Principais passos: checkout do código, configuração do Python, instalação de dependências, iniciar um MySQL temporário (via `docker run`) apenas quando os segredos necessários estão disponíveis, executar os testes unitários com debug extra (discovery explícito) e gerar artefatos de build locais.
+	- Uso: indicado para validar mudanças de código antes de enviar para homologação.
+
+- `ci-homolog.yml` — objetivo: validar a imagem que será homologada.
+	- Quando é executado: push em branches de homologação e `workflow_dispatch`.
+	- Principais passos: além dos passos do `ci-dev`, este workflow pode construir a imagem Docker e, se houver segredos de registry, fazer login e push para um registry privado ou GHCR (passos protegidos por condicionais).
+	- Observação: em repositórios forkados os segredos não estão disponíveis — por isso os passos de push são pulados automaticamente.
+
+- `ci-preprod.yml` — objetivo: integração mais próxima da produção.
+	- Comportamento: constrói a imagem com as mesmas configurações que a produção e roda um conjunto de testes/integrations smoke tests; prepara artefatos que podem ser promovidos ao ambiente de produção.
+
+- `ci-prod.yml` — objetivo: pipeline de release/produção.
+	- Segurança: o job de deploy para produção está configurado com `environment: production` para suportar approvals/revisões no GitHub (proteções do Environment).
+	- Operações sensíveis (push de imagens e deploy) só ocorrem se os segredos de registry e `KUBECONFIG_BASE64` estiverem presentes.
+
+- `ci-cd.yml` — pipeline central / referência.
+	- Função: reúne as etapas principais de build/test/deploy e é usado como modelo. Contém a lógica de build com Buildx, normalização de tags (owner/repo em minúsculas) e passos de deploy opcionais.
+
+Como os workflows tratam secrets e o MySQL
+
+- Para evitar erros de validação do YAML (quando se usa `secrets.*` em expressões de parsing), exportei os `secrets` para variáveis `env` no nível do job e usei `env.*` nas condicionais dos passos.
+- Quando preciso iniciar o MySQL com credenciais sensíveis, eu executo `docker run` dentro do job e aguardo a disponibilidade do serviço — essa abordagem permite passar senhas que não ficam visíveis no arquivo do workflow.
+- Os passos de login/push ao registry são condicionais: só rodarão se `env.DOCKERHUB_USERNAME` / `env.REGISTRY` estiverem definidos.
+
+Arquivos Kubernetes (pasta `k8s/`) — descrição dos manifestos
+
+O repositório contém uma pasta `k8s/` com manifests que usei para testar deploys em cluster. Abaixo descrevo cada arquivo e por que ele existe:
+
+- `k8s/namespace-dev.yaml` — define o namespace `dev` para isolar recursos de desenvolvimento.
+- `k8s/secret-example.yaml` — exemplo de secret (NÃO aplicar em produção sem adaptar). Serve como modelo para criar secrets com `kubectl create secret`.
+- `k8s/mysql-deployment.yaml` — deployment (ou manifest) que cria uma instância de MySQL para ambientes que não precisem de persistência complexa.
+- `k8s/mysql-statefulset.yaml` — StatefulSet para MySQL quando é necessário armazenamento persistente com identidade de pod.
+- `k8s/mysql-headless-svc.yaml` — serviço headless para descoberta de pods do MySQL (usado com StatefulSet).
+- `k8s/app-deployment-dev.yaml` — Deployment do aplicativo (imagem, variáveis de ambiente, probes) para ambiente de desenvolvimento.
+- `k8s/app-service-dev.yaml` — Service que expõe o `app-deployment-dev` internamente no cluster.
+- `k8s/deployment.yaml` e `k8s/service.yaml` — manifests mais genéricos que podem ser usados como base para deploys em outros ambientes (pré-produção/produção) — normalmente preciso ajustar `replicas`, `resources` e `image` antes de aplicar.
+- `k8s/README.md` — notas e instruções rápidas contidas na pasta (recomendo revisar antes de aplicar).
+
+Recomendações práticas sobre os manifests
+
+- Não aplique `secret-example.yaml` sem substituir valores por secrets reais via `kubectl create secret generic` ou via CI com GitHub Secrets.
+- Para testes locais, use `imagePullPolicy: IfNotPresent` ou ajuste as imagens para apontar a tags locais geradas pelo workflow.
+- Ordem sugerida de aplicação para testes locais: namespace → secrets → storage (PVCs/statefulset) → banco (MySQL) → app (deployment/service).
 
 CI/CD — o que implementei
 
