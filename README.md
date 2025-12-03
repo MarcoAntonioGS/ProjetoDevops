@@ -77,7 +77,7 @@ Desenvolvi workflows específicos por ambiente: `ci-dev.yml`, `ci-homolog.yml`, 
 
 Notas sobre Kubernetes
 
-Se houver manifests (pasta `k8s/` ou `manifests/`), os workflows estão preparados para receber um `KUBECONFIG_BASE64` como secret e executar o deploy. Recomendações que segui:
+Com os manifests (pasta `k8s/` ou `manifests/`), os workflows estão preparados para receber um `KUBECONFIG_BASE64` como secret e executar o deploy. Recomendações que segui:
 
 - Proteja o `kubeconfig` como Secret no repositório e limite permissões.
 - Use `environment: production` nas jobs de deploy para aproveitar approvals do GitHub Environments.
@@ -110,17 +110,6 @@ Troubleshooting rápido
 - Erro ao push para GHCR: confirme que owner/repo está em minúsculas e que o token tem permissão `packages:write`.
 - MySQL não fica pronto no CI: consulte `docker logs <mysql-container>` ou aumente o timeout/wait loop no workflow.
 - GUI: erro "no display name and no $DISPLAY environment variable": rode o X Server e use o `docker-compose.gui.yml` com `DISPLAY` apontando para o host.
-
-O que posso acrescentar
-
-- Gerar um script PowerShell (`scripts/boot-environments.ps1`) para automatizar limpeza e boot dos perfis Compose.
-- Ajustar `docker-compose.homolog.yml` para usar `build:` por padrão em execuções locais.
-- Revisar `school_schedule.py` para tornar a importação totalmente segura (posso aplicar a mudança se desejar).
-
-Contato e execução
-
-Se quiser que eu faça qualquer uma das opções acima (script PowerShell, ajuste do compose de homologação, ou tornar `school_schedule.py` import-safe), diga qual e eu implemento em seguida.
-
 
 Detalhes práticos sobre os workflows
 - Triggers e workflows por ambiente:
@@ -213,13 +202,7 @@ O compose já define `DISPLAY=host.docker.internal:0.0` — se você usa WSL2, a
 
 ## Resumo final
 
-Este README agora documenta o fluxo principal do projeto, os workflows de CI/CD e como executar o projeto localmente com Docker Compose (incluindo GUI via X forwarding) e com Kubernetes quando aplicável. Se quiser, eu posso:
-
-- Ajustar `docker-compose.homolog.yml` para forçar `build:` localmente (útil para testes locais);
-- Adicionar um pequeno script PowerShell para automatizar a limpeza/boot dos ambientes;
-- Revisar `school_schedule.py` para garantir que a importação seja segura (sem abrir GUI ao importar) — isso facilita execução de testes em CI.
-
-
+Este README documenta o fluxo principal do projeto, os workflows de CI/CD e como executar o projeto localmente com Docker Compose (incluindo GUI via X forwarding) e com Kubernetes.
 ## Como rodar localmente
 
 1. Instale o MySQL e crie o banco `sistema_escolar`.
