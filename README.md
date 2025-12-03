@@ -181,11 +181,6 @@ docker compose -f docker-compose.dev.yml up --build
 docker compose -f docker-compose.gui.yml up --build
 ```
 
-Limpeza de containers locais (PowerShell):
-# Opcional: remover volumes associados (tenha cuidado — isso apaga dados)
-docker volume ls --filter name=school_scheduler -q | ForEach-Object { docker volume rm $_ }
-```
-
 ## Testes
 
 Para executar os testes localmente use:
